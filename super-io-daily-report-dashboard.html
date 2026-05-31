@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>超级IO工业版 · 每日运营报告看板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-card: #1e293b;
+    --bg-card-hover: #273548;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --border: #334155;
+    --accent-blue: #3b82f6;
+    --accent-green: #22c55e;
+    --accent-red: #ef4444;
+    --accent-amber: #f59e0b;
+    --accent-cyan: #06b6d4;
+    --accent-purple: #a855f7;
+    --gradient-header: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  header {
+    background: var(--gradient-header);
+    border-bottom: 2px solid var(--accent-blue);
+    padding: 20px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(12px);
+  }
+  header .logo { display: flex; align-items: center; gap: 12px; }
+  header .logo .icon {
+    width: 42px; height: 42px;
+    background: var(--accent-blue);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  header .logo h1 { font-size: 22px; font-weight: 700; letter-spacing: 0.5px; }
+  header .logo span { color: var(--accent-cyan); }
+  header .meta { text-align: right; }
+  header .meta .time { font-size: 14px; color: var(--text-secondary); }
+  header .meta .status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; margin-top: 4px; }
+  header .meta .status .dot { width: 8px; height: 8px; background: var(--accent-green); border-radius: 50%; animation: pulse 2s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  main { padding: 28px 32px; display: grid; gap: 24px; }
+  
+  /* KPI Cards */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .kpi-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    transition: all 0.2s;
+  }
+  .kpi-card:hover { background: var(--bg-card-hover); transform: translateY(-1px); }
+  .kpi-card .label { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .kpi-card .value { font-size: 36px; font-weight: 700; letter-spacing: -1px; }
+  .kpi-card .delta { font-size: 13px; margin-top: 6px; }
+  .kpi-card .delta.positive { color: var(--accent-green); }
+  .kpi-card .delta.negative { color: var(--accent-red); }
+  .kpi-card .delta.neutral { color: var(--text-secondary); }
+  
+  /* Sections */
+  .section {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
+  }
+  @media (max-width: 1024px) { .section { grid-template-columns: 1fr; } }
+  
+  .panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel-header h2 { font-size: 16px; font-weight: 600; }
+  .panel-header .badge {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: rgba(59,130,246,0.15);
+    color: var(--accent-blue);
+  }
+  .panel-body { padding: 20px; }
+  
+  /* Device Health Table */
+  .device-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .device-table th {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+  .device-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(51,65,85,0.4);
+  }
+  .device-table tr:hover td { background: rgba(59,130,246,0.04); }
+  .health-dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+  }
+  .health-dot.good { background: var(--accent-green); }
+  .health-dot.warn { background: var(--accent-amber); }
+  .health-dot.bad { background: var(--accent-red); }
+  .health-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--border);
+    overflow: hidden;
+    margin-top: 4px;
+    width: 100px;
+  }
+  .health-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s;
+  }
+  
+  /* Timeline */
+  .timeline { position: relative; padding-left: 24px; }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+  .timeline-item { position: relative; margin-bottom: 16px; }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -20px;
+    top: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent-blue);
+    border: 2px solid var(--bg-card);
+  }
+  .timeline-item.warning::before { background: var(--accent-amber); }
+  .timeline-item.danger::before { background: var(--accent-red); }
+  .timeline-item .ts { font-size: 11px; color: var(--text-muted); }
+  .timeline-item .evt { font-size: 13px; color: var(--text-primary); margin: 2px 0; }
+  .timeline-item .src { font-size: 11px; color: var(--text-secondary); }
+  
+  /* Chart area */
+  .chart-container { position: relative; width: 100%; height: 280px; }
+  .chart-container canvas { width: 100% !important; }
+  
+  /* Report Panel */
+  .report-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+  }
+  .report-card:hover { border-color: var(--accent-blue); }
+  .report-card h3 { font-size: 14px; margin-bottom: 8px; }
+  .report-card p { font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
+  .report-card .actions { margin-top: 10px; display: flex; gap: 8px; }
+  
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+  .btn-primary { background: var(--accent-blue); color: white; }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-secondary); }
+  .btn-outline:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  
+  /* Tags */
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .tag-green { background: rgba(34,197,94,0.15); color: var(--accent-green); }
+  .tag-amber { background: rgba(245,158,11,0.15); color: var(--accent-amber); }
+  .tag-red { background: rgba(239,68,68,0.15); color: var(--accent-red); }
+  .tag-blue { background: rgba(59,130,246,0.15); color: var(--accent-blue); }
+  
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 680px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+  }
+  .modal h2 { font-size: 20px; margin-bottom: 16px; }
+  .modal p { font-size: 14px; color: var(--text-secondary); line-height: 1.8; margin-bottom: 12px; }
+  .modal .close-btn {
+    float: right;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 4px 8px;
+  }
+  .modal .close-btn:hover { color: var(--text-primary); }
+  
+  footer {
+    text-align: center;
+    padding: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  
+  /* Skeleton loading */
+  @keyframes shimmer {
+    0% { background-position: -200px 0; }
+    100% { background-position: 200px 0; }
+  }
+  .skeleton {
+    background: linear-gradient(90deg, var(--border) 25%, #2d3a4f 50%, var(--border) 75%);
+    background-size: 200px 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="icon">🏭</div>
+    <div>
+      <h1>超级IO工业版 <span>·</span> 每日运营报告</h1>
+    </div>
+  </div>
+  <div class="meta">
+    <div class="time" id="clock">---</div>
+    <div class="status"><span class="dot"></span> 超级IO数据总线在线 · 设备数 <span id="deviceCount">--</span></div>
+  </div>
+</header>
+
+<main>
+  <!-- KPI Row -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="label">📊 综合OEE</div>
+      <div class="value" style="color:var(--accent-green)" id="kpi-oee">--</div>
+      <div class="delta positive" id="kpi-oee-delta">--</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">📦 今日产量</div>
+      <div class="value" style="color:var(--accent-blue)" id="kpi-output">--</div>
+      <div class="delta neutral" id="kpi-output-delta">--</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">✅ 一次合格率</div>
+      <div class="value" style="color:var(--accent-green)" id="kpi-fpy">--</div>
+      <div class="delta positive" id="kpi-fpy-delta">--</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">⚡ 单位能耗</div>
+      <div class="value" style="color:var(--accent-amber)" id="kpi-energy">--</div>
+      <div class="delta negative" id="kpi-energy-delta">--</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">🔧 维护预警</div>
+      <div class="value" style="color:var(--accent-red)" id="kpi-alerts">--</div>
+      <div class="delta neutral" id="kpi-alerts-delta">--</div>
+    </div>
+  </div>
+
+  <!-- Charts + Timeline Section -->
+  <div class="section">
+    <div class="panel">
+      <div class="panel-header">
+        <h2>📈 今日生产趋势 & 关键事件</h2>
+        <span class="badge">每15分钟刷新</span>
+      </div>
+      <div class="panel-body">
+        <div class="chart-container">
+          <canvas id="chart-production"></canvas>
+        </div>
+        <div style="margin-top:20px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div class="chart-container" style="height:200px">
+            <canvas id="chart-quality"></canvas>
+          </div>
+          <div class="chart-container" style="height:200px">
+            <canvas id="chart-energy"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>⏱️ 实时事件流</h2>
+        <span class="badge" style="background:rgba(6,182,212,0.15);color:var(--accent-cyan)">语义因果引擎</span>
+      </div>
+      <div class="panel-body" style="max-height:520px;overflow-y:auto">
+        <div class="timeline" id="timeline"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Device Health + Daily Reports -->
+  <div class="section">
+    <div class="panel">
+      <div class="panel-header">
+        <h2>🖥️ 设备健康状态矩阵</h2>
+        <span class="badge" style="background:rgba(168,85,247,0.15);color:var(--accent-purple)">12台活跃设备</span>
+      </div>
+      <div class="panel-body" style="overflow-x:auto">
+        <table class="device-table" id="deviceTable">
+          <thead>
+            <tr>
+              <th>设备名称</th>
+              <th>类型</th>
+              <th>协议</th>
+              <th>健康状态</th>
+              <th>RUL预估</th>
+              <th>上次告警</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>📝 AI每日报告</h2>
+        <button class="btn btn-outline btn-sm" onclick="refreshReport()">🔄 刷新报告</button>
+      </div>
+      <div class="panel-body" style="max-height:520px;overflow-y:auto" id="dailyReports">
+        <div class="skeleton" style="height:80px;margin-bottom:12px"></div>
+        <div class="skeleton" style="height:80px;margin-bottom:12px"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  超级IO工业版 v0.1 · LLM驱动语义互联架构 · 数据基于白皮书仿真生成 · 生成时间：<span id="genTime">---</span>
+</footer>
+
+<!-- Report Detail Modal -->
+<div class="modal-overlay" id="reportModal">
+  <div class="modal" id="reportModalContent"></div>
+</div>
+
+<script>
+// ============================================
+// 超级IO工业版 · 每日运营报告看板
+// 基于 super-io-whitepaper-industrial.md 数据模型
+// ============================================
+
+// ---- Data Model ----
+const FACTORY_CONFIG = {
+  name: '某某汽车零部件 · 精密加工车间',
+  shiftStart: '08:00',
+  shiftEnd: '20:00',
+  targetDaily: 1200,
+  devices: [
+    { id: 'CNC-001', name: 'CNC#1 立式加工中心', type: 'CNC', protocol: 'PROFINET', health: 92, rulDays: 180, lastAlert: '无', status: 'good' },
+    { id: 'CNC-002', name: 'CNC#2 立式加工中心', type: 'CNC', protocol: 'PROFINET', health: 88, rulDays: 150, lastAlert: '无', status: 'good' },
+    { id: 'CNC-003', name: 'CNC#3 五轴加工中心', type: 'CNC', protocol: 'EtherCAT', health: 64, rulDays: 28, lastAlert: '主轴轴承退化预警', status: 'warn' },
+    { id: 'RBT-001', name: 'Robot#1 发那科R-2000iC', type: '工业机器人', protocol: 'EtherCAT', health: 95, rulDays: 365, lastAlert: '无', status: 'good' },
+    { id: 'RBT-002', name: 'Robot#2 发那科R-2000iC', type: '工业机器人', protocol: 'EtherCAT', health: 90, rulDays: 300, lastAlert: '无', status: 'good' },
+    { id: 'AGV-001', name: 'AGV#1 海康MR-Q3', type: 'AGV', protocol: 'MQTT', health: 78, rulDays: 90, lastAlert: '电池容量衰减', status: 'warn' },
+    { id: 'AGV-002', name: 'AGV#2 海康MR-Q3', type: 'AGV', protocol: 'MQTT', health: 96, rulDays: 210, lastAlert: '无', status: 'good' },
+    { id: 'PRESS-001', name: '压力机#1 800T闭式', type: '冲压', protocol: 'OPC-UA', health: 71, rulDays: 45, lastAlert: '模具刃口磨损预警', status: 'warn' },
+    { id: 'CAM-001', name: '质检站#1 康耐视In-Sight', type: '质检', protocol: 'GigE Vision', health: 99, rulDays: 500, lastAlert: '无', status: 'good' },
+    { id: 'CAM-002', name: '质检站#2 海克斯康CMM', type: '质检', protocol: 'EtherNet/IP', health: 97, rulDays: 400, lastAlert: '无', status: 'good' },
+    { id: 'VIB-001', name: '振动监测#1 ABB AVP', type: '传感器', protocol: 'HART', health: 93, rulDays: 600, lastAlert: '无', status: 'good' },
+    { id: 'CNV-001', name: '传送带#1 施耐德', type: '输送', protocol: 'Modbus TCP', health: 85, rulDays: 120, lastAlert: '驱动电机电流偏高', status: 'warn' },
+  ]
+};
+
+// ---- Simulated Daily Data (would come from SuperIO data bus) ----
+function generateDailyData() {
+  const now = new Date();
+  const hour = now.getHours();
+  const shiftProgress = Math.min(1, Math.max(0, (hour - 8) / 12));
+  
+  const baseOutput = Math.floor(840 + shiftProgress * 360 + Math.random() * 40);
+  const oee = 72 + Math.random() * 16;
+  const fpy = 94.5 + Math.random() * 4.2;
+  const energy = 2.8 + Math.random() * 0.8;
+  const alerts = Math.floor(Math.random() * 5);
+  
+  return { oee, baseOutput, fpy, energy, alerts, shiftProgress };
+}
+
+// ---- Timeline Events ----
+function generateTimeline() {
+  const now = new Date();
+  const events = [
+    { ts: fmtTime(new Date(now - 15*60000)), type: 'info', text: 'CNC#3 完成当前批次加工，切换至下一工单', src: 'MES系统' },
+    { ts: fmtTime(new Date(now - 45*60000)), type: 'warn', text: 'CNC#3 主轴轴承BPFO特征频率幅值↑12%，接近预警阈值', src: '振动监测#1 · 语义中继' },
+    { ts: fmtTime(new Date(now - 72*60000)), type: 'info', text: 'AGV#2 完成物料配送任务，返回充电站', src: 'AGV调度Agent' },
+    { ts: fmtTime(new Date(now - 110*60000)), type: 'warn', text: '质检站#1 检出连续3件表面粗糙度Ra超标（批次B-20260530）', src: '质检边缘节点 · 因果引擎' },
+    { ts: fmtTime(new Date(now - 150*60000)), type: 'info', text: '压力机#1 模具温度分布均匀，冷却系统运行正常', src: '热成像巡检机器人' },
+    { ts: fmtTime(new Date(now - 210*60000)), type: 'danger', text: '焊接区#2 检出1人未佩戴防护面罩（已自动推送告警至当班主管）', src: '安全合规Agent · 固定摄像头' },
+    { ts: fmtTime(new Date(now - 280*60000)), type: 'info', text: 'LLM因果引擎输出：毛坯批次B-20260530硬度偏高可能是表面粗糙度超标根因（置信度82%）', src: 'LLM推理编排层' },
+    { ts: fmtTime(new Date(now - 340*60000)), type: 'info', text: '生产调度Agent建议：将WO-1430紧急工单插入CNC#2空闲窗口', src: '生产调度优化Agent' },
+    { ts: fmtTime(new Date(now - 400*60000)), type: 'warn', text: '传送带#1 驱动电机电流较基线偏高18%，建议检查张紧轮', src: '预测性维护Agent · Modbus语义适配器' },
+    { ts: fmtTime(new Date(now - 480*60000)), type: 'info', text: '能效优化Agent：建议将非关键负载平移至谷电时段（次日00:00-06:00）', src: '能效优化Agent' },
+  ];
+  return events;
+}
+
+function fmtTime(d) {
+  return d.toTimeString().slice(0,5);
+}
+
+// ---- Generate AI Daily Reports ----
+function generateDailyReports() {
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0,10);
+  const d = generateDailyData();
+  
+  return [
+    {
+      id: 'rpt-quality',
+      title: `🔍 ${dateStr} 质量根因分析日报`,
+      category: '质量',
+      tag: 'tag-amber',
+      summary: `今日检出表面粗糙度超差7件（批次B-20260530），LLM因果引擎推断根因为毛坯硬度批次波动（置信度82%）。建议：(1) 降低CNC-003进给率至0.12mm/rev；(2) 暂停B-20260530批次并送检毛坯硬度。较昨日超差率下降23%，AI根因定位准确率持续提升。`,
+      details: [
+        '缺陷检出总量：7件（昨日：9件，↓22%）',
+        'LLM根因分析耗时：31秒（人工排查平均4小时，效率提升464倍）',
+        '交叉验证信号：主轴负载↑8%、振动BPFO↑12%、毛坯批次变更在-30min',
+        '受影响工单：WO-2026-05-30-1423、WO-2026-05-30-1424',
+        '刀具磨损状态：正常，RUL预估2100件',
+        '建议进给率调整：0.15→0.12 mm/rev',
+      ]
+    },
+    {
+      id: 'rpt-maintenance',
+      title: `🔧 ${dateStr} 预测性维护日报`,
+      category: '维护',
+      tag: 'tag-red',
+      summary: `CNC#3主轴前轴承BPFO幅值持续上升，RUL预估从45天缩短至28天。建议在下个维护窗口（预计7天后）安排轴承检查。模具刃口磨损导致冲压偏载指数上升至0.14/0.15，建议4h内利用换模窗口修磨。`,
+      details: [
+        'CNC#3主轴轴承RUL：28天（↓37%，加速退化趋势）',
+        '压力机#1模具剩余寿命：~8000冲次（预计10个工作日）',
+        'AGV#1电池健康度：78%（建议30天后更换）',
+        '传送带#1电机电流趋势：↑18%（建议本周内检查张紧轮和轴承）',
+        '润滑系统巡检：全部正常',
+        '下次计划停机窗口：2026-06-06 08:00-12:00',
+      ]
+    },
+    {
+      id: 'rpt-production',
+      title: `📦 ${dateStr} 生产运营日报`,
+      category: '生产',
+      tag: 'tag-blue',
+      summary: `今日截至目前产出${d.baseOutput}件（目标1200件，${(d.baseOutput/12).toFixed(0)}%节拍）。OEE预估${d.oee.toFixed(1)}%。AGV调度系统优化后物料送达平均延迟从4.5min降至1.6min，下游缺料停线0次。`,
+      details: [
+        `当前产量：${d.baseOutput}件（目标1200件/班次）`,
+        `预估OEE：${d.oee.toFixed(1)}%（昨日：74.2%）`,
+        `一次合格率FPY：${d.fpy.toFixed(1)}%（昨日：96.8%）`,
+        'AGV空驶率：16%（昨日：35%，↓54%）',
+        '下游缺料停线：0次（昨日：1次）',
+        '紧急插单响应：22秒（人工平均15分钟）',
+      ]
+    },
+    {
+      id: 'rpt-safety',
+      title: `🛡️ ${dateStr} 安全合规巡检日报`,
+      category: '安全',
+      tag: 'tag-green',
+      summary: `今日安全态势评分：91/100（良好）。固定摄像头+巡检机器人覆盖全厂高风险区。检出1次防护面罩缺失违规（焊接区#2），已自动推送至当班主管并在30秒内纠正。电气柜红外巡检全部正常。`,
+      details: [
+        '安全态势评分：91/100（↑3，较昨日）',
+        '违规检出：1次（PPE缺失-防护面罩）',
+        '违规纠正耗时：28秒（自动告警→主管确认→纠正）',
+        '电气柜红外巡检：12个配电柜全部正常，最高温度52°C',
+        '气体检测：VOC/CO浓度均在安全限值内',
+        '高风险区人员越界：0次',
+      ]
+    },
+    {
+      id: 'rpt-energy',
+      title: `⚡ ${dateStr} 能效优化日报`,
+      category: '能效',
+      tag: 'tag-amber',
+      summary: `今日单位能耗${d.energy.toFixed(2)} kWh/件（较昨日+5%，因CNC#3高负载加工）。能效优化Agent建议将压缩空气系统和辅助冷却泵负载平移至次日00:00-06:00谷电时段，预估日节省电费¥320。`,
+      details: [
+        `单位能耗：${d.energy.toFixed(2)} kWh/件（目标<3.0）`,
+        '峰电时段用电占比：68%（昨日：65%）',
+        '谷电平移潜力：可平移负载约45kW',
+        '压缩空气系统泄漏率：3.2%（较上月↑0.5%，建议巡检）',
+        '热回收系统效率：82%（正常运行）',
+        '预估月度电费节省：¥8,500-12,000',
+      ]
+    },
+  ];
+}
+
+// ---- Render Functions ----
+function renderKPIs(data) {
+  document.getElementById('kpi-oee').textContent = data.oee.toFixed(1) + '%';
+  document.getElementById('kpi-oee-delta').textContent = '▲1.2% vs 昨日';
+  document.getElementById('kpi-output').textContent = data.baseOutput;
+  document.getElementById('kpi-output-delta').textContent = '节拍 ' + (data.baseOutput/12).toFixed(0) + '%';
+  document.getElementById('kpi-fpy').textContent = data.fpy.toFixed(1) + '%';
+  document.getElementById('kpi-fpy-delta').textContent = '▲0.3% vs 昨日';
+  document.getElementById('kpi-energy').textContent = data.energy.toFixed(2) + ' kWh/件';
+  document.getElementById('kpi-energy-delta').textContent = '▼0.15 vs 昨日';
+  document.getElementById('kpi-alerts').textContent = data.alerts;
+  document.getElementById('kpi-alerts-delta').textContent = '较昨日-2';
+}
+
+function renderDeviceTable() {
+  const tbody = document.querySelector('#deviceTable tbody');
+  tbody.innerHTML = FACTORY_CONFIG.devices.map(d => {
+    const healthColor = d.status === 'good' ? 'var(--accent-green)' : d.status === 'warn' ? 'var(--accent-amber)' : 'var(--accent-red)';
+    const healthLabel = d.status === 'good' ? '良好' : d.status === 'warn' ? '关注' : '故障';
+    return `
+      <tr>
+        <td><strong>${d.name}</strong></td>
+        <td>${d.type}</td>
+        <td><span class="tag tag-blue">${d.protocol}</span></td>
+        <td>
+          <span class="health-dot ${d.status}"></span>${healthLabel}
+          <div class="health-bar"><div class="health-bar-fill" style="width:${d.health}%;background:${healthColor}"></div></div>
+        </td>
+        <td style="color:${d.rulDays < 60 ? 'var(--accent-red)' : d.rulDays < 120 ? 'var(--accent-amber)' : 'var(--text-secondary)'}">${d.rulDays}天</td>
+        <td style="font-size:12px;color:${d.lastAlert === '无' ? 'var(--text-muted)' : 'var(--accent-amber)'}">${d.lastAlert}</td>
+      </tr>
+    `;
+  }).join('');
+  document.getElementById('deviceCount').textContent = FACTORY_CONFIG.devices.length;
+}
+
+function renderTimeline() {
+  const events = generateTimeline();
+  document.getElementById('timeline').innerHTML = events.map(e => `
+    <div class="timeline-item ${e.type === 'warn' ? 'warning' : e.type === 'danger' ? 'danger' : ''}">
+      <div class="ts">${e.ts}</div>
+      <div class="evt">${e.text}</div>
+      <div class="src">📡 ${e.src}</div>
+    </div>
+  `).join('');
+}
+
+function renderReports() {
+  const reports = generateDailyReports();
+  document.getElementById('dailyReports').innerHTML = reports.map(r => `
+    <div class="report-card">
+      <h3>${r.title} <span class="tag ${r.tag}">${r.category}</span></h3>
+      <p>${r.summary}</p>
+      <div class="actions">
+        <button class="btn btn-outline btn-sm" onclick="showReportDetail('${r.id}')">📋 查看详情</button>
+      </div>
+    </div>
+  `).join('');
+  
+  // Store reports globally for modal access
+  window._reports = reports;
+}
+
+function showReportDetail(id) {
+  const report = window._reports.find(r => r.id === id);
+  if (!report) return;
+  
+  document.getElementById('reportModalContent').innerHTML = `
+    <button class="close-btn" onclick="closeModal()">✕</button>
+    <h2>${report.title} <span class="tag ${report.tag}">${report.category}</span></h2>
+    <p>${report.summary}</p>
+    <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border)">
+      <h3 style="font-size:14px; margin-bottom:12px; color:var(--text-secondary)">📊 详细数据</h3>
+      <ul style="list-style:none; padding:0">
+        ${report.details.map(d => `<li style="padding:6px 0; font-size:13px; color:var(--text-secondary); border-bottom:1px solid rgba(51,65,85,0.3)">${d}</li>`).join('')}
+      </ul>
+    </div>
+  `;
+  document.getElementById('reportModal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('reportModal').classList.remove('active');
+}
+
+function refreshReport() {
+  const reports = generateDailyReports();
+  window._reports = reports;
+  document.getElementById('dailyReports').innerHTML = reports.map(r => `
+    <div class="report-card">
+      <h3>${r.title} <span class="tag ${r.tag}">${r.category}</span></h3>
+      <p>${r.summary}</p>
+      <div class="actions">
+        <button class="btn btn-outline btn-sm" onclick="showReportDetail('${r.id}')">📋 查看详情</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ---- Charts ----
+let chartProduction, chartQuality, chartEnergy;
+
+function renderCharts() {
+  const now = new Date();
+  const labels = [];
+  const productionData = [];
+  const qualityData = [];
+  const energyData = [];
+  
+  for (let i = 23; i >= 0; i--) {
+    const t = new Date(now - i * 15 * 60000);
+    labels.push(t.getHours().toString().padStart(2,'0') + ':' + t.getMinutes().toString().padStart(2,'0'));
+    productionData.push(Math.floor(30 + Math.random() * 25 + (i < 8 ? 10 : 0)));
+    qualityData.push(95 + Math.random() * 4);
+    energyData.push(2.5 + Math.random() * 1.2);
+  }
+  
+  const chartOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+    scales: {
+      x: { ticks: { color: '#64748b', maxTicksLimit: 8, font: { size: 10 } }, grid: { color: 'rgba(51,65,85,0.3)' } },
+      y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(51,65,85,0.3)' } }
+    }
+  };
+  
+  if (chartProduction) chartProduction.destroy();
+  if (chartQuality) chartQuality.destroy();
+  if (chartEnergy) chartEnergy.destroy();
+  
+  const ctx1 = document.getElementById('chart-production').getContext('2d');
+  chartProduction = new Chart(ctx1, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: '产量 (件/15min)', data: productionData, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.3, pointRadius: 0 },
+        { label: 'OEE趋势 (%)', data: productionData.map(v => 60 + Math.random() * 25 + (v > 45 ? 10 : 0)), borderColor: '#22c55e', borderDash: [5,3], tension: 0.3, pointRadius: 0 }
+      ]
+    },
+    options: chartOpts
+  });
+  
+  const ctx2 = document.getElementById('chart-quality').getContext('2d');
+  chartQuality = new Chart(ctx2, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: '一次合格率 FPY (%)', data: qualityData, borderColor: '#a855f7', backgroundColor: 'rgba(168,85,247,0.1)', fill: true, tension: 0.3, pointRadius: 0 }
+      ]
+    },
+    options: { ...chartOpts, plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } } }
+  });
+  
+  const ctx3 = document.getElementById('chart-energy').getContext('2d');
+  chartEnergy = new Chart(ctx3, {
+    type: 'bar',
+    data: {
+      labels: labels.filter((_, i) => i % 4 === 0),
+      datasets: [
+        { label: '能耗 (kWh)', data: energyData.filter((_, i) => i % 4 === 0), backgroundColor: '#f59e0b', borderRadius: 4 }
+      ]
+    },
+    options: { ...chartOpts, plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } } }
+  });
+}
+
+// ---- Clock ----
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleString('zh-CN', { 
+    year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit',
+    hour12: false
+  });
+  document.getElementById('genTime').textContent = now.toLocaleString('zh-CN', { hour12: false });
+}
+
+// ---- Modal click-outside ----
+document.getElementById('reportModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ---- Init ----
+function init() {
+  const data = generateDailyData();
+  renderKPIs(data);
+  renderDeviceTable();
+  renderTimeline();
+  renderReports();
+  renderCharts();
+  updateClock();
+  
+  setInterval(updateClock, 1000);
+  setInterval(() => {
+    const d = generateDailyData();
+    renderKPIs(d);
+    renderTimeline();
+  }, 60000); // refresh KPIs + timeline every minute
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>
